@@ -11,7 +11,7 @@ variable "location" {
 variable "avs_virtual_network_cidr" {
   description = "The CIDR block for the AVS virtual network."
   type        = string
-  default     = "10.240.0.0/23"
+  default     = "10.240.0.0/21"
 }
 
 variable "alz_hub_fw_private_ip" {

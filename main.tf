@@ -68,7 +68,7 @@ module "ip_calc" {
 
   address_space = var.avs_virtual_network_cidr
   address_prefixes = {
-    "sddc"          = 24
+    "sddc"          = 22
     "storage" = 24
   }
 }
