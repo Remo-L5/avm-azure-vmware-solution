@@ -1,10 +1,6 @@
 
 locals {
-  location_shortname = {
-    eastus = "use"
-    centralus = "usc"
-  }
-  base_name = "avs-${local.location_shortname[var.location]}"
+  base_name = "avs-${var.location}"
 
   avs_secrets = {
     vcenter_pass = {
@@ -66,6 +62,82 @@ resource "azurerm_key_vault_secret" "avs_pass" {
   lifecycle { ignore_changes = [tags] }
 }
 
+module "ip_calc" {
+  source  = "Azure/avm-utl-network-ip-addresses/azurerm"
+  version = "0.1.0"
+
+  address_space = var.avs_virtual_network_cidr
+  address_prefixes = {
+    "sddc"          = 24
+    "storage" = 24
+  }
+}
+
+module "avs_nsg" {
+  source  = "Azure/avm-res-network-networksecuritygroup/azurerm"
+  version = "0.5.0"
+  location            = module.resource_group.resource.location
+  resource_group_name = module.resource_group.name
+  name     = "nsg-${local.base_name}"
+}
+
+module "avs_vnet" {
+  source  = "Azure/avm-res-network-virtualnetwork/azurerm"
+  version = "0.7.1"
+
+  subscription_id = data.azurerm_client_config.current.subscription_id
+  address_space       = [var.avs_virtual_network_cidr]
+  location            = module.resource_group.resource.location
+  resource_group_name = module.resource_group.name
+  name                = "vnet-${local.base_name}"
+  dns_servers = [
+    var.alz_hub_fw_private_ip
+  ]
+  subnets = {
+    sddc = {
+      name             = "AvsSddcSubnet"
+      address_prefixes = [module.ip_calc.address_prefixes["sddc"]]
+      network_security_group = {
+        id = module.avs_nsg.id
+      }
+    }
+    storage = {
+      name             = "AvsStorageSubnet"
+      address_prefixes = [module.ip_calc.address_prefixes["storage"]]
+      network_security_group = {
+        id = module.avs_nsg.id
+      }
+      delegation = [
+        {
+          name = "Microsoft.Netapp/volumes"
+          service_delegation = {
+            name = "Microsoft.Netapp/volumes"
+          }
+        }
+      ]
+    }
+  }
+
+  peerings = {
+    to_alz_hub = {
+      name = "peering-to-alz-hub-${var.location}"
+      remote_virtual_network_resource_id = var.alz_hub_vnet_resource_id
+      allow_forwarded_traffic                = true
+      allow_gateway_transit      = true
+      use_remote_gateways        = true
+      allow_virtual_network_access = true
+      peer_complete_vnets = true
+      create_reverse_peering = true
+      reverse_name                          = "peering-to-avs-${var.location}"
+      reverse_allow_forwarded_traffic       = false
+      reverse_allow_gateway_transit         = false
+      reverse_allow_virtual_network_access  = true
+      reverse_peer_complete_vnets           = true
+      reverse_use_remote_gateways = false
+    }
+  }
+}
+
 module "avs_private_cloud" {
   source  = "Azure/avm-res-avs-privatecloud/azurerm"
   version = "0.9.0"
@@ -74,14 +146,18 @@ module "avs_private_cloud" {
     azurerm_key_vault_secret.avs_pass
   ]
 
-  avs_network_cidr           = var.avs_network_cidr
-  extended_network_blocks    = var.avs_extended_network_blocks
+  avs_network_cidr           = module.ip_calc.address_prefixes["sddc"]
   internet_enabled           = false
   location                   = module.resource_group.resource.location
-  name                       = "avs-sddc-${local.location_shortname[var.location]}"
+  name                       = "avs-sddc-${var.location}"
   resource_group_name        = module.resource_group.name
   resource_group_resource_id = module.resource_group.resource_id
   enable_telemetry = var.enable_telemetry
+
+  ### AVS Gen2 Vars
+  virtual_network_resource_id = azurerm_virtual_network.avs_vnet_primary_region.id
+  dns_zone_type = "Private"
+  #################################
 
   sku_name                   = var.avs_management_cluster_sku
   management_cluster_size    = var.avs_management_cluster_size
@@ -122,22 +198,6 @@ module "avs_private_cloud" {
   ### AVS NSXT CONFIGURATION BLOCK
   nsxt_password = random_password.avs_pass["nsxt_pass"].result
   segments = var.avs_nsxt_segments
-  #########################################
-
-  ### AVS EXPRESSROUTE CONFIGURATION BLOCK
-  expressroute_connections = {
-    default = {
-      name                             = "er-vnet-gateway-connection"
-      authorization_key_name           = "er-alz-authorization-key"
-      expressroute_gateway_resource_id = var.alz_express_route_gateway_resource_id
-    }
-  }
-  global_reach_connections = {
-    ("gr-${var.location}") = {
-      authorization_key                     = var.alz_express_route_circuit_authorization_key_name
-       peer_expressroute_circuit_resource_id = var.alz_express_route_circuit_resource_id
-    }
-  }
   #########################################
 
   # addons = {

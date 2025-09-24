@@ -8,10 +8,17 @@ variable "location" {
   }
 }
 
-variable "avs_network_cidr" {
-  description = "The CIDR block for the AVS network."
+variable "avs_virtual_network_cidr" {
+  description = "The CIDR block for the AVS virtual network."
   type        = string
-  default     = "10.240.0.0/22"
+  default     = "10.240.0.0/23"
+}
+
+variable "alz_hub_fw_private_ip" {
+  description = "The private IP address of the ALZ Hub Firewall."
+  type        = string
+  default     = ""
+  
 }
 
 variable "avs_management_cluster_sku" {
@@ -32,12 +39,6 @@ variable "avs_management_cluster_size" {
     condition     = var.avs_management_cluster_size > 3 && var.avs_management_cluster_size < 15
     error_message = "The AVS management cluster size must be between 3 and 15."
   }
-}
-
-variable "avs_extended_network_blocks" {
-  description = "The extended network blocks for the AVS deployment."
-  type        = list(string)
-  default     = ["10.250.0.0/23"]
 }
 
 variable "avs_additional_cluster_size" {
@@ -74,22 +75,8 @@ variable "enable_telemetry" {
   
 }
 
-variable "alz_express_route_gateway_resource_id" {
-  description = "The resource ID of the ExpressRoute Gateway for ALZ."
-  type        = string
-  default     = ""
-  
-}
-
-variable "alz_express_route_circuit_resource_id" {
-  description = "The resource ID of the ExpressRoute Circuit for ALZ."
-  type        = string
-  default     = ""
-  
-}
-
-variable "alz_express_route_circuit_authorization_key_name" {
-  description = "The authorization key name for the ALZ ExpressRoute Circuit."
+variable "alz_hub_vnet_resource_id" {
+  description = "The resource ID of the ALZ Hub VNet."
   type        = string
   default     = ""
   
