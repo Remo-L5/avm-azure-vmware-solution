@@ -30,9 +30,11 @@ module "keyvault" {
   resource_group_name    = module.resource_group.name
   tenant_id              = data.azurerm_client_config.current.tenant_id
   enabled_for_deployment = true
+  public_network_access_enabled = true
   network_acls = {
     default_action = "Allow"
     bypass         = "AzureServices"
+    ip_rules      = [] # Add IPs if needed
   }
   role_assignments = {
     deployment_user_secrets = {
@@ -94,13 +96,6 @@ module "avs_vnet" {
     var.alz_hub_fw_private_ip
   ]
   subnets = {
-    sddc = {
-      name             = "AvsSddcSubnet"
-      address_prefixes = [module.ip_calc.address_prefixes["sddc"]]
-      network_security_group = {
-        id = module.avs_nsg.id
-      }
-    }
     storage = {
       name             = "AvsStorageSubnet"
       address_prefixes = [module.ip_calc.address_prefixes["storage"]]
