@@ -57,8 +57,8 @@ resource "random_password" "avs_pass" {
 resource "azurerm_key_vault_secret" "avs_pass" {
   for_each = local.avs_secrets
   name         = each.value.name
-  value        = random_password.vcenter_pass.result
-  key_vault_id = module.keyvault.id
+  value        = random_password.avs_pass[each.key].result
+  key_vault_id = module.keyvault.resource_id
   content_type = "Password"
 
   lifecycle { ignore_changes = [tags] }
@@ -100,7 +100,7 @@ module "avs_vnet" {
       name             = "AvsStorageSubnet"
       address_prefixes = [module.ip_calc.address_prefixes["storage"]]
       network_security_group = {
-        id = module.avs_nsg.id
+        id = module.avs_nsg.resource_id
       }
       delegation = [
         {
@@ -150,7 +150,7 @@ module "avs_private_cloud" {
   enable_telemetry = var.enable_telemetry
 
   ### AVS Gen2 Vars
-  virtual_network_resource_id = azurerm_virtual_network.avs_vnet_primary_region.id
+  virtual_network_resource_id = module.avs_vnet.resource_id
   dns_zone_type = "Private"
   #################################
 
