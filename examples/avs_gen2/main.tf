@@ -43,7 +43,7 @@ module "keyvault" {
     }
   }
   wait_for_rbac_before_secret_operations = {
-    create = "60s"
+    create = "90s"
   }
 }
 
@@ -51,7 +51,7 @@ module "keyvault" {
 resource "random_password" "avs_pass" {
   for_each = local.avs_secrets
   length  = 20
-  special = false
+  special = true
 }
 # Create Key Vault Secret
 resource "azurerm_key_vault_secret" "avs_pass" {
@@ -85,32 +85,31 @@ module "avs_nsg" {
 
 module "avs_vnet" {
   source  = "Azure/avm-res-network-virtualnetwork/azurerm"
-  version = "0.7.1"
+  version = "0.12.0"
+  parent_id = "/subscriptions/${var.subscription_id}/resourceGroups/${module.resource_group.name}"
 
-  subscription_id = data.azurerm_client_config.current.subscription_id
   address_space       = [var.avs_virtual_network_cidr]
   location            = module.resource_group.resource.location
-  resource_group_name = module.resource_group.name
   name                = "vnet-${local.base_name}"
   dns_servers = [
     var.alz_hub_fw_private_ip
   ]
   subnets = {
-    storage = {
-      name             = "AvsStorageSubnet"
-      address_prefixes = [module.ip_calc.address_prefixes["storage"]]
-      network_security_group = {
-        id = module.avs_nsg.resource_id
-      }
-      delegation = [
-        {
-          name = "Microsoft.Netapp/volumes"
-          service_delegation = {
-            name = "Microsoft.Netapp/volumes"
-          }
-        }
-      ]
-    }
+    # storage = {
+    #   name             = "AvsStorageSubnet"
+    #   address_prefixes = [module.ip_calc.address_prefixes["storage"]]
+    #   network_security_group = {
+    #     id = module.avs_nsg.resource_id
+    #   }
+    #   delegation = [
+    #     {
+    #       name = "Microsoft.Netapp/volumes"
+    #       service_delegation = {
+    #         name = "Microsoft.Netapp/volumes"
+    #       }
+    #     }
+    #   ]
+    # }
   }
 
   peerings = {
@@ -157,12 +156,12 @@ module "avs_private_cloud" {
   sku_name                   = var.avs_management_cluster_sku
   management_cluster_size    = var.avs_management_cluster_size
 
-  clusters = {
+  clusters = var.avs_additional_cluster_size > 0 ? {
     expansion_1 = {
       cluster_node_count = var.avs_additional_cluster_size
       sku_name = var.avs_additional_cluster_sku
     }
-  }
+  } : {}
 
   managed_identities = {
     system_assigned = true
@@ -215,6 +214,6 @@ module "avs_private_cloud" {
   }
 
   tags = { 
-    scenario = "avs_default_gen1"
+    scenario = "avs_default_gen2"
   }
 }
